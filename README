@@ -1,0 +1,15 @@
+A tool for updating a spreadsheet.
+
+spreadsheet list "key column"
+spreadsheet update "key column" key "value column" value
+
+Flags:
+  --conf file  -- Specify the config file - this will store your
+		  auth credentials and the spreadsheet and worksheet
+		  you want to work with.
+                  default: .spreadsheet.yaml
+
+The spreadsheet should have a list of column titles in row 1.
+
+The update and list commandis will look through the "key column" until
+there's an empty cell.
