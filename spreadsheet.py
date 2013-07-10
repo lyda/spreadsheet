@@ -115,9 +115,6 @@ class Spreadsheet(object):
     self._conf = conf
     self._gd = gdata.spreadsheets.client.SpreadsheetsClient()
 
-    self._port = 49301
-    self._httpd = None
-
     try:
       self._reuseAuth()
     except KeyError:
@@ -138,6 +135,8 @@ class Spreadsheet(object):
     """
 
     # Start webserver and do OAuth dance.
+    port = 49301
+    httpd = None
     while httpd == None:
       # TODO: This could loop past port==65k or ignore other errors.
       #       Make the loop smarter.
@@ -224,19 +223,24 @@ class Spreadsheet(object):
   def _getHeaders(self):
     """Get the headers from the spreadsheet.
 
+    If there's a 'headers' in self._conf use that, otherwise get
+    it from the spreadsheet.
+
     TODO:
-      * Cache these.
       * Get these via the CellFeed thingy.  Less RTs.
     """
-    col = 1
-    self._headers = []
-    while True:
-      cell = self._gd.GetCell(self._conf['id'], self._conf['wsid'], 1, col)
-      if cell.content.text != None:
-        self._headers.append(cell.content.text)
-      else:
-        break
-      col += 1
+    if 'headers' in self._conf:
+      self._headers = self._conf['headers']
+    else:
+      col = 1
+      self._headers = []
+      while True:
+        cell = self._gd.GetCell(self._conf['id'], self._conf['wsid'], 1, col)
+        if cell.content.text != None:
+          self._headers.append(cell.content.text)
+        else:
+          break
+        col += 1
 
   def update(self, keyname, key, valuename, value):
     """Update a cell in a spreadsheet.
@@ -251,17 +255,23 @@ class Spreadsheet(object):
     """
     search_col = self._headers.index(keyname) + 1
     update_col = self._headers.index(valuename) + 1
-    row = 2
+
     found = False
-    while not found:
-      cell = self._gd.GetCell(self._conf['id'], self._conf['wsid'],
-          row, search_col)
-      if cell.content.text == None:
-        break
-      if cell.content.text == key:
-        found = True
-      else:
-        row += 1
+    if 'cache_%s' % keyname in self._conf:
+      row = self._conf['cache_%s' % keyname].index(key) + 2
+      found = True
+    else:
+      row = 2
+      while not found:
+        cell = self._gd.GetCell(self._conf['id'], self._conf['wsid'],
+            row, search_col)
+        if cell.content.text == None:
+          break
+        if cell.content.text == key:
+          found = True
+        else:
+          row += 1
+
     if found:
       cell = self._gd.GetCell(self._conf['id'], self._conf['wsid'],
           row, update_col)
@@ -272,7 +282,10 @@ class Spreadsheet(object):
     """List a named column in a spreadsheet.
 
     List the column labeled 'keyname.'
+
+    If this column is cached, update the cache.
     """
+    keycache = []
     col = self._headers.index(keyname) + 1
     row = 2
     while True:
@@ -280,7 +293,37 @@ class Spreadsheet(object):
       if cell.content.text == None:
         break
       print cell.content.text
+      keycache.append(cell.content.text)
       row += 1
+    if 'cache_%s' % keyname in self._conf:
+      self._conf['cache_%s' % keyname] = keycache
+
+  def cache_headers(self):
+    """Cache headers."""
+    self._conf['headers'] = self._headers
+
+  def cache_key(self, keyname):
+    """List a named column in a spreadsheet.
+
+    List the column labeled 'keyname.'
+    """
+    keycache = []
+    col = self._headers.index(keyname) + 1
+    row = 2
+    while True:
+      cell = self._gd.GetCell(self._conf['id'], self._conf['wsid'], row, col)
+      if cell.content.text == None:
+        break
+      keycache.append(cell.content.text)
+      row += 1
+    self._conf['cache_%s' % keyname] = keycache
+
+  def forget_headers(self):
+    """Cache headers."""
+    del(self._conf['headers'])
+
+  def forget_key(self, keyname):
+    del(self._conf['cache_%s' % keyname])
 
 if __name__ == '__main__':
   try:
@@ -294,3 +337,14 @@ if __name__ == '__main__':
     ss.update(*sys.argv[2:])
   elif sys.argv[1] == 'list':
     ss.print_list(*sys.argv[2:])
+  elif sys.argv[1] == 'remember':
+    if sys.argv[2] == 'headers':
+      ss.cache_headers()
+    else:
+      ss.cache_key(*sys.argv[2:])
+  elif sys.argv[1] == 'forget':
+    if sys.argv[2] == 'headers':
+      ss.forget_headers()
+    else:
+      ss.forget_key(*sys.argv[2:])
+
