@@ -17,7 +17,22 @@ FLAGS = gflags.FLAGS
 gflags.DEFINE_string('conf', '.spreadsheet.yaml', 'Config file.')
 
 class OAuthHTTPServer(BaseHTTPServer.HTTPServer):
+  """A simple http server to hand the OAuth responses.
+
+  Using OAuthHTTPHandler (defined below), this extends
+  BaseHTTPServer.HTTPServer to listen for OAuth responses and
+  shutdown when one is found.
+
+  TODO:
+    * Add a timeout.
+    * Perhaps try to read a response from stdin as well? Perhaps
+      twisted could be used here?
+  """
   def __init__(self, server_address, RequestHandlerClass):
+    """Starts listening on the port.
+
+    Will raise socket.error if the port can't be reserved.
+    """
     # Note: Not using super() here because BaseHTTPServer.HTTPServer is
     # an "old-style" object. Sigh.
     BaseHTTPServer.HTTPServer.__init__(self,
@@ -25,12 +40,20 @@ class OAuthHTTPServer(BaseHTTPServer.HTTPServer):
     self.oauth_url = None
 
   def get_oauth_url(self):
+    """Start listening for requests. Return when one is found."""
     while self.oauth_url == None:
       self.handle_request()
     self.server_close()
 
 class OAuthHTTPHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+  """Look for oauth verification responses.
+
+  Looks for OAuth verification responses and update the oauth_url
+  member in the server object. As a side-effect this will tell the
+  server to quit.
+  """
   def _simple_response(self, code, title='', body=''):
+    """A util function to emit nicer responses."""
     self.send_response(code)
     self.send_header('Content-type', 'text/html')
     self.end_headers()
@@ -39,12 +62,21 @@ class OAuthHTTPHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         (title, body))
 
   def do_GET(self):
+    """Look for an oauth verifier url.
+
+    Save an oauth verifier url in the oauth_url member of the server
+    object. Try and tell the browser to close the window (doesn't work).
+    """
     if 'oauth_verifier' in self.path:
       # TODO: window.close only works with pages that javascript opened.
       self._simple_response(200, body='<script>window.close();</script>')
       self.server.oauth_url = self.path
     else:
       self._simple_response(200, title='Error', body='No OAuth received.')
+
+  def log_message(self, format, *args):
+    """Quiet BaseHTTPRequestHandler's normally chatty logging."""
+    pass
 
 class Config(object):
   def __init__(self, config_file):
@@ -85,14 +117,6 @@ class Spreadsheet(object):
 
     self._port = 49301
     self._httpd = None
-    while self._httpd == None:
-      # TODO: This could loop past port==65k or ignore other errors.
-      #       Make the loop smarter.
-      try:
-        self._httpd = OAuthHTTPServer(('127.1', self._port), OAuthHTTPHandler)
-      except socket.error:
-        self._port += 1
-        self._httpd = None
 
     try:
       self._reuseAuth()
@@ -105,24 +129,44 @@ class Spreadsheet(object):
     self._getHeaders()
 
   def _initialAuth(self):
+    """Initiate the OAuth dance.
+
+    A webserver is started to get the OAuth verification token.
+    Then an OAuth request is made. Once the user verifies this, the
+    browser is redirected to localhost and an access token is
+    created and stored in the Config object.
+    """
+
+    # Start webserver and do OAuth dance.
+    while httpd == None:
+      # TODO: This could loop past port==65k or ignore other errors.
+      #       Make the loop smarter.
+      try:
+        httpd = OAuthHTTPServer(('127.1', port), OAuthHTTPHandler)
+      except socket.error:
+        port += 1
+        httpd = None
     request_token = self._gd.get_oauth_token(
         scopes=['https://spreadsheets.google.com/feeds/'],
-        next='http://localhost:%s/' % self._port,
+        next='http://localhost:%s/' % port,
         consumer_key='322152070718.apps.googleusercontent.com',
         consumer_secret='4gF964cqCqImms0mH13HAbWf')
     print 'Authorization URL: %s ' % request_token.generate_authorization_url(
         google_apps_domain='ie.suberic.net')
-    self._httpd.get_oauth_url()
-    gdata.gauth.authorize_request_token(request_token,
-        self._httpd.oauth_url)
+    httpd.get_oauth_url()
+
+    # Get request token and use that to get access token.
+    gdata.gauth.authorize_request_token(request_token, httpd.oauth_url)
     self._gd.auth_token = self._gd.get_access_token(request_token)
     self._conf['access_token'] = gdata.gauth.token_to_blob(self._gd.auth_token)
 
   def _reuseAuth(self):
+    """Load the access token from the Config object."""
     self._gd.auth_token = gdata.gauth.token_from_blob(
         self._conf['access_token'])
 
   def _ask_user(self, question):
+    """A simple comandline dialog."""
     response = raw_input(question)
     try:
       choice = int(response) - 1
@@ -133,6 +177,7 @@ class Spreadsheet(object):
     return None
 
   def _pickSpreadsheet(self):
+    """List all the spreadsheets and allow user to pick one."""
     feed = self._gd.get_spreadsheets()
     sheets = list(
         enumerate(feed.entry, start=1))
@@ -155,6 +200,7 @@ class Spreadsheet(object):
       self._conf['id'] = id_parts[len(id_parts) - 1]
 
   def _pickWorksheet(self):
+    """List all the worksheets and allow user to pick one."""
     feed = self._gd.get_worksheets(self._conf['id'])
     sheets = list(enumerate(feed.entry, start=1))
 
@@ -176,6 +222,12 @@ class Spreadsheet(object):
       self._conf['wsid'] = id_parts[len(id_parts) - 1]
 
   def _getHeaders(self):
+    """Get the headers from the spreadsheet.
+
+    TODO:
+      * Cache these.
+      * Get these via the CellFeed thingy.  Less RTs.
+    """
     col = 1
     self._headers = []
     while True:
