@@ -1,2 +1,5 @@
 .spreadsheet.yaml
 *.pyc
+.app.json
+.auth.json
+.ss.json

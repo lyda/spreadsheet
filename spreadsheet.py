@@ -8,16 +8,19 @@ import os.path
 import gdata.auth
 import gdata.spreadsheets.client
 import gdata.client
-import yaml
+import json
 import gflags
 import BaseHTTPServer
 import socket
 
 FLAGS = gflags.FLAGS
-gflags.DEFINE_string('conf', '.spreadsheet.yaml', 'Config file.')
+gflags.DEFINE_string('app_conf', '.app.json', 'App config file.')
+gflags.DEFINE_string('auth_conf', '.auth.json', 'Auth config file.')
+gflags.DEFINE_string('ss', 'ss', 'Spreadsheet config prefix.')
+gflags.DEFINE_string('ss_conf', '.ss.json', 'Spreadsheet config file.')
 
 class OAuthHTTPServer(BaseHTTPServer.HTTPServer):
-  """A simple http server to hand the OAuth responses.
+  """A simple http server to handle the OAuth responses.
 
   Using OAuthHTTPHandler (defined below), this extends
   BaseHTTPServer.HTTPServer to listen for OAuth responses and
@@ -79,49 +82,90 @@ class OAuthHTTPHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     pass
 
 class Config(object):
-  def __init__(self, config_file):
+  """Configuration class.
+
+  There are three of these used by the Spreadsheets class. Since
+  they could all use the same file, the data is prefixed by the
+  current section.
+
+  All changes are made after re-reading from disk.
+  """
+
+  def __init__(self, prefix, config_file):
+    self._prefix = prefix
     self._config_file = config_file
+    # Read here to confirm the config file is accessible.
+    self._read()
+
+  def _read(self):
     try:
-      self._conf = yaml.load(open(self._config_file, 'r'))
+      self._conf = json.load(open(self._config_file, 'r'))
     except IOError:
       self._conf = dict()
+      self._conf[self._prefix] = dict()
+      self._write()
+    else:
+      if self._prefix not in self._conf:
+        self._conf[self._prefix] = dict()
+        self._write()
+
+  def _write(self):
+    with open(self._config_file, 'w') as conf:
+      conf.write(json.dumps(self._conf))
 
   def __len__(self):
-    return len(self._conf)
+    return len(self._conf[self._prefix])
 
   def __getitem__(self, key):
-    return self._conf[key]
+    return self._conf[self._prefix][key]
 
   def __setitem__(self, key, value):
-    self._conf[key] = value
-    with open(self._config_file, 'w') as conf:
-      conf.write(yaml.dump(self._conf))
+    self._read()
+    self._conf[self._prefix][key] = value
+    self._write()
 
   def __delitem__(self, key):
-    del(self._conf[key])
-    with open(self._config_file, 'w') as conf:
-      conf.write(yaml.dump(self._conf))
+    self._read()
+    del(self._conf[self._prefix][key])
+    self._write()
 
   def __iter__(self):
-    return self._conf.__iter__()
+    return self._conf[self._prefix].__iter__()
 
   def next(self):
-    return self._conf.next()
+    return self._conf[self._prefix].next()
+
+  def setdefault(self, key, value=None):
+    self._read()
+    result = self._conf[self._prefix].setdefault(key, value)
+    self._write()
+    return result
+
+
+class SpreadsheetOutOfPorts(Exception):
+  pass
 
 
 class Spreadsheet(object):
 
-  def __init__(self, conf):
-    self._conf = conf
+  def __init__(self, apprc, authrc, ssrc):
+    # Read config files; set defaults if unset.
+    self._apprc = apprc
+    self._authrc = authrc
+    self._ssrc = ssrc
+    self._apprc.setdefault('consumer_key', 'anonymous')
+    self._apprc.setdefault('consumer_secret', 'anonymous')
+    self._apprc.setdefault('google_apps_domain', None)
+    self._ssrc.setdefault('head_row', 1)
     self._gd = gdata.spreadsheets.client.SpreadsheetsClient()
 
     try:
       self._reuseAuth()
     except KeyError:
       self._initialAuth()
-    if 'id' not in self._conf:
+    if 'id' not in self._ssrc:
       self._pickSpreadsheet()
-    if 'wsid' not in self._conf:
+    if 'wsid' not in self._ssrc:
       self._pickWorksheet()
     self._getHeaders()
 
@@ -145,24 +189,27 @@ class Spreadsheet(object):
       except socket.error:
         port += 1
         httpd = None
+        if port > (2 ** 16 - 1):
+          raise SpreadsheetOutOfPorts()
     request_token = self._gd.get_oauth_token(
         scopes=['https://spreadsheets.google.com/feeds/'],
         next='http://localhost:%s/' % port,
-        consumer_key='322152070718.apps.googleusercontent.com',
-        consumer_secret='4gF964cqCqImms0mH13HAbWf')
+        consumer_key=str(self._apprc['consumer_key']),
+        consumer_secret=str(self._apprc['consumer_secret']))
     print 'Authorization URL: %s ' % request_token.generate_authorization_url(
-        google_apps_domain='ie.suberic.net')
+        google_apps_domain=str(self._apprc['google_apps_domain']))
     httpd.get_oauth_url()
 
     # Get request token and use that to get access token.
     gdata.gauth.authorize_request_token(request_token, httpd.oauth_url)
     self._gd.auth_token = self._gd.get_access_token(request_token)
-    self._conf['access_token'] = gdata.gauth.token_to_blob(self._gd.auth_token)
+    self._authrc['access_token'] = gdata.gauth.token_to_blob(
+        self._gd.auth_token)
 
   def _reuseAuth(self):
     """Load the access token from the Config object."""
     self._gd.auth_token = gdata.gauth.token_from_blob(
-        self._conf['access_token'])
+        str(self._authrc['access_token']))
 
   def _ask_user(self, question):
     """A simple comandline dialog."""
@@ -178,29 +225,6 @@ class Spreadsheet(object):
   def _pickSpreadsheet(self):
     """List all the spreadsheets and allow user to pick one."""
     feed = self._gd.get_spreadsheets()
-    sheets = list(
-        enumerate(feed.entry, start=1))
-
-    choice = None
-    for i, sheet in sheets:
-      print '%d. %s' % (i, sheet.title.text)
-      if i % 10 == 0:
-        choice = self._ask_user(
-            'Return to continue list, q to quit, # to choose: ')
-        if choice != None:
-          break
-    if choice == None:
-      choice = self._ask_user('Press q to quit or # to choose: ')
-      if choice == None:
-        sys.exit(1)
-
-    if choice >= 0:
-      id_parts = sheets[choice][1].id.text.split('/')
-      self._conf['id'] = id_parts[len(id_parts) - 1]
-
-  def _pickWorksheet(self):
-    """List all the worksheets and allow user to pick one."""
-    feed = self._gd.get_worksheets(self._conf['id'])
     sheets = list(enumerate(feed.entry, start=1))
 
     choice = None
@@ -218,29 +242,53 @@ class Spreadsheet(object):
 
     if choice >= 0:
       id_parts = sheets[choice][1].id.text.split('/')
-      self._conf['wsid'] = id_parts[len(id_parts) - 1]
+      self._ssrc['id'] = id_parts[len(id_parts) - 1]
+
+  def _pickWorksheet(self):
+    """List all the worksheets and allow user to pick one."""
+    feed = self._gd.get_worksheets(self._ssrc['id'])
+    sheets = list(enumerate(feed.entry, start=1))
+
+    choice = None
+    for i, sheet in sheets:
+      print '%d. %s' % (i, sheet.title.text)
+      if i % 10 == 0:
+        choice = self._ask_user(
+            'Return to continue list, q to quit, # to choose: ')
+        if choice != None:
+          break
+    if choice == None:
+      choice = self._ask_user('Press q to quit or # to choose: ')
+      if choice == None:
+        sys.exit(1)
+
+    if choice >= 0:
+      id_parts = sheets[choice][1].id.text.split('/')
+      self._ssrc['wsid'] = id_parts[len(id_parts) - 1]
 
   def _getHeaders(self):
     """Get the headers from the spreadsheet.
 
-    If there's a 'headers' in self._conf use that, otherwise get
+    If there's a 'headers' in self._ssrc use that, otherwise get
     it from the spreadsheet.
 
     TODO:
       * Get these via the CellFeed thingy.  Less RTs.
     """
-    if 'headers' in self._conf:
-      self._headers = self._conf['headers']
+    if 'headers' in self._ssrc:
+      self._headers = self._ssrc['headers']
     else:
       col = 1
       self._headers = []
       while True:
-        cell = self._gd.GetCell(self._conf['id'], self._conf['wsid'], 1, col)
+        cell = self._gd.GetCell(self._ssrc['id'], self._ssrc['wsid'],
+                                self._ssrc['head_row'], col)
         if cell.content.text != None:
           self._headers.append(cell.content.text)
         else:
           break
         col += 1
+      self._ssrc['headers'] = self._headers
 
   def update(self, keyname, key, valuename, value):
     """Update a cell in a spreadsheet.
@@ -257,13 +305,13 @@ class Spreadsheet(object):
     update_col = self._headers.index(valuename) + 1
 
     found = False
-    if 'cache_%s' % keyname in self._conf:
-      row = self._conf['cache_%s' % keyname].index(key) + 2
+    if 'cache_%s' % keyname in self._ssrc:
+      row = self._ssrc['cache_%s' % keyname].index(key) + 2
       found = True
     else:
       row = 2
       while not found:
-        cell = self._gd.GetCell(self._conf['id'], self._conf['wsid'],
+        cell = self._gd.GetCell(self._ssrc['id'], self._ssrc['wsid'],
             row, search_col)
         if cell.content.text == None:
           break
@@ -273,7 +321,7 @@ class Spreadsheet(object):
           row += 1
 
     if found:
-      cell = self._gd.GetCell(self._conf['id'], self._conf['wsid'],
+      cell = self._gd.GetCell(self._ssrc['id'], self._ssrc['wsid'],
           row, update_col)
       cell.cell.input_value = value
       self._gd.update(cell)
@@ -289,18 +337,23 @@ class Spreadsheet(object):
     col = self._headers.index(keyname) + 1
     row = 2
     while True:
-      cell = self._gd.GetCell(self._conf['id'], self._conf['wsid'], row, col)
+      cell = self._gd.GetCell(self._ssrc['id'], self._ssrc['wsid'], row, col)
       if cell.content.text == None:
         break
       print cell.content.text
       keycache.append(cell.content.text)
       row += 1
-    if 'cache_%s' % keyname in self._conf:
-      self._conf['cache_%s' % keyname] = keycache
+    if 'cache_%s' % keyname in self._ssrc:
+      self._ssrc['cache_%s' % keyname] = keycache
+
+  def head_row(self, head_row):
+    self.forget_headers()
+    self._ssrc['head_row'] = head_row
+    self._getHeaders()
 
   def cache_headers(self):
     """Cache headers."""
-    self._conf['headers'] = self._headers
+    self._ssrc['headers'] = self._headers
 
   def cache_key(self, keyname):
     """List a named column in a spreadsheet.
@@ -311,19 +364,21 @@ class Spreadsheet(object):
     col = self._headers.index(keyname) + 1
     row = 2
     while True:
-      cell = self._gd.GetCell(self._conf['id'], self._conf['wsid'], row, col)
+      cell = self._gd.GetCell(self._ssrc['id'], self._ssrc['wsid'], row, col)
       if cell.content.text == None:
         break
       keycache.append(cell.content.text)
       row += 1
-    self._conf['cache_%s' % keyname] = keycache
+    self._ssrc['cache_%s' % keyname] = keycache
 
   def forget_headers(self):
     """Cache headers."""
-    del(self._conf['headers'])
+    if 'headers' in self._ssrc:
+      del(self._ssrc['headers'])
 
   def forget_key(self, keyname):
-    del(self._conf['cache_%s' % keyname])
+    if 'cache_%s' % keyname in self._ssrc:
+      del(self._ssrc['cache_%s' % keyname])
 
 if __name__ == '__main__':
   try:
@@ -331,12 +386,29 @@ if __name__ == '__main__':
   except gflags.FlagsError, err:
     print '%s\\nUsage: %s ARGS\\n%s' % (err, sys.argv[0], FLAGS)
     sys.exit(1)
-  conf = Config(FLAGS.conf)
-  ss = Spreadsheet(conf)
+
+  # Load config files.
+  apprc = Config('app', FLAGS.app_conf)
+  authrc = Config('auth', FLAGS.auth_conf)
+  ssrc = Config('ss_%s' % FLAGS.ss, FLAGS.ss_conf)
+
+  # Commands that don't need a Spreadsheet.
+  if sys.argv[1] == 'app_config':
+    apprc['consumer_key'] = sys.argv[2]
+    apprc['consumer_secret'] = sys.argv[3]
+    apprc['google_apps_domain'] = sys.argv[4]
+    sys.exit(0)
+
+  # Commands that need a Spreadsheet.
+  ss = Spreadsheet(apprc, authrc, ssrc)
   if sys.argv[1] == 'update':
     ss.update(*sys.argv[2:])
   elif sys.argv[1] == 'list':
     ss.print_list(*sys.argv[2:])
+  elif sys.argv[1] == 'headrow':
+    print('This is not yet finished - look for "2" in src.')
+    sys.exit(1)
+    ss.head_row(int(sys.argv[2]))
   elif sys.argv[1] == 'remember':
     if sys.argv[2] == 'headers':
       ss.cache_headers()
@@ -347,4 +419,3 @@ if __name__ == '__main__':
       ss.forget_headers()
     else:
       ss.forget_key(*sys.argv[2:])
-
