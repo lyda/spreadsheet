@@ -65,12 +65,27 @@ Opening issues on github is easiest, but I'll check any of them.
 
 TODO
 ====
+
+Authentication
+~~~~~~~~~~~~~~
+
 * Currently authentication redirects to a local url. Document that
   url and give the user the option to change it.
 * Likewise, it currently listens on localhost and a dynamically
   chosen port. Provide a way to supply that.
-* Clean up how the auth token is found.
+* Might also print the url the browser will redirect to.
+* Clean up how the auth token is found by the listener.
+* Have the listener display a page saying auth success.
+
+Testing and API
+~~~~~~~~~~~~~~~
 * Some unit tests of some sort.
+* Ideas for mocking gdata?
+* Is `issue580`_ fixed yet? If so remove the ``str()`` calls for
+  GetCells parameters.
+
+Features and hardening
+~~~~~~~~~~~~~~~~~~~~~~
 * A way to add rows.  And a way to delete them.
 * Finish allowing users to specify the title row number.
 * A command similar to update that allows users to specify the
@@ -81,8 +96,6 @@ TODO
   in case the user knows the caches are wrong and can use these to
   tell us ahead of time.
 * Handle a bunch of possible exceptions in the gdata API.
-* Is `issue580`_ fixed yet? If so remove the ``str()`` calls for
-GetCells parameters.
 
 Credits
 =======
