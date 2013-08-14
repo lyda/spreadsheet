@@ -16,6 +16,7 @@ directory:
   default these are anonymous, but if you have Google Apps for your
   domain, you might want to set these. TODO: Explain how and provide
   urls to Google help docs and the app admin panel for this.
+  (console: https://code.google.com/apis/console ; docs: ?)
 * ``.auth.json``: These store your auth credentials. The ``spreadsheet``
   tool will manipulate these.
 * ``.ss.json``: This records the spreadsheet and worksheet you chose
