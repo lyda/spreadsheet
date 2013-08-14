@@ -58,7 +58,7 @@ The source code is available in the following locations:
 * code.google: https://code.google.com/p/spreadsheet-cl/
 * Github: https://github.com/lyda/spreadsheet
 * Gitorious: https://gitorious.org/uu/spreadsheet
-* Sourceforge: https://sourceforge.net/p/spreadsheet
+* Sourceforge: https://sourceforge.net/p/spreadsheet-cl
 
 Pull requests on any of those platforms or emailed patches are fine.
 Opening issues on github is easiest, but I'll check any of them.
