@@ -55,7 +55,7 @@ as ``spreadsheet``. The project page is on `pypi`_:
 The source code is available in the following locations:
 
 * Bitbucket: https://bitbucket.org/lyda/spreadsheet/
-* code.google: https://code.google.com/p/spreadsheet/
+* code.google: https://code.google.com/p/spreadsheet-cl/
 * Github: https://github.com/lyda/spreadsheet
 * Gitorious: https://gitorious.org/uu/spreadsheet
 * Sourceforge: https://sourceforge.net/p/spreadsheet
