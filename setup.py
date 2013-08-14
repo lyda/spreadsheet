@@ -159,7 +159,7 @@ setup(
   description='A tool to manipulate Google Spreadsheets',
   long_description=open('README.rst').read(),
   py_modules=[],
-  scripts=['spreadsheets', ],
+  scripts=['spreadsheet', ],
   keywords='google spreadsheet gdata',
   license='GNU General Public License v3',
   platforms=['POSIX'],

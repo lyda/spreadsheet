@@ -96,6 +96,7 @@ Features and hardening
   in case the user knows the caches are wrong and can use these to
   tell us ahead of time.
 * Handle a bunch of possible exceptions in the gdata API.
+* Do command parsing better.
 
 Credits
 =======

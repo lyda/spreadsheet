@@ -4,3 +4,4 @@
 .auth.json
 .ss.json
 .*.swp
+build/

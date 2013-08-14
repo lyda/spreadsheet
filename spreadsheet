@@ -1,5 +1,17 @@
 #!/usr/bin/python
 
+"""USAGE: /usr/local/bin/spreadsheet [flags] <command>
+
+commands:
+  app_conf "consumer_key" "consumer_secret" "google_apps_domain"
+  list "key column"
+  update "key column" key "value column" value
+  remember headers
+  remember "column"
+  forget headers
+  forget "column"
+"""
+
 __author__ = 'Kevin Lyda <kevin@ie.suberic.net>'
 
 import sys
