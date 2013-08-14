@@ -298,7 +298,7 @@ class Spreadsheet(object):
     then the cell in the 'OS' column in the same row as 'foo' in
     the 'Host' column would be set to 'Multics.'
     """
-    search_col = self._headers.index(keyname) + 1
+    search_col = str(self._headers.index(keyname) + 1)
     update_col = self._headers.index(valuename) + 1
 
     found = False
@@ -308,7 +308,7 @@ class Spreadsheet(object):
     else:
       row = 2
       cq = gdata.spreadsheets.client.CellQuery(
-               min_row=str(row), min_col=col, max_col=col)
+               min_row=str(row), min_col=search_col, max_col=search_col)
       cells = self._gd.GetCells(self._ssrc['id'], self._ssrc['wsid'], q=cq)
       row_cells = list(enumerate(cells.entry, start=row))
       for update_row, cell in row_cells:
