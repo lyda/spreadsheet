@@ -303,23 +303,24 @@ class Spreadsheet(object):
 
     found = False
     if 'cache_%s' % keyname in self._ssrc:
-      row = self._ssrc['cache_%s' % keyname].index(key) + 2
+      update_row = self._ssrc['cache_%s' % keyname].index(key) + 2
       found = True
     else:
       row = 2
-      while not found:
-        cell = self._gd.GetCell(self._ssrc['id'], self._ssrc['wsid'],
-            row, search_col)
-        if cell.content.text == None:
-          break
+      cq = gdata.spreadsheets.client.CellQuery(
+               min_row=str(row), min_col=col, max_col=col)
+      cells = self._gd.GetCells(self._ssrc['id'], self._ssrc['wsid'], q=cq)
+      row_cells = list(enumerate(cells.entry, start=row))
+      for update_row, cell in row_cells:
         if cell.content.text == key:
           found = True
+          break
         else:
           row += 1
 
     if found:
       cell = self._gd.GetCell(self._ssrc['id'], self._ssrc['wsid'],
-          row, update_col)
+          update_row, update_col)
       cell.cell.input_value = value
       self._gd.update(cell)
 
