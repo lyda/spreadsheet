@@ -5,3 +5,5 @@
 .ss.json
 .*.swp
 build/
+MANIFEST
+dist/
