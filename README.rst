@@ -100,7 +100,7 @@ Features and hardening
 
 Credits
 =======
-- `Kevin Lyda`_: Who got burned one too many times by broken crontabs.
+- `Kevin Lyda`_: Spreadsheets are fine once I can script them...
 
 .. _`Kevin Lyda`: https://github.com/lyda
 .. _`pypi`: https://pypi.python.org/pypi/spreadsheet
