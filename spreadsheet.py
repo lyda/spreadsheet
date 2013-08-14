@@ -278,16 +278,13 @@ class Spreadsheet(object):
     if 'headers' in self._ssrc:
       self._headers = self._ssrc['headers']
     else:
-      col = 1
+      row = str('1')
       self._headers = []
-      while True:
-        cell = self._gd.GetCell(self._ssrc['id'], self._ssrc['wsid'],
-                                self._ssrc['head_row'], col)
-        if cell.content.text != None:
-          self._headers.append(cell.content.text)
-        else:
-          break
-        col += 1
+      cq = gdata.spreadsheets.client.CellQuery(
+               min_row=row, max_row=row, min_col=str(1))
+      cells = self._gd.GetCells(self._ssrc['id'], self._ssrc['wsid'], q=cq)
+      for cell in cells.entry:
+        self._headers.append(cell.content.text)
       self._ssrc['headers'] = self._headers
 
   def update(self, keyname, key, valuename, value):
