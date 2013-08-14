@@ -334,15 +334,15 @@ class Spreadsheet(object):
     If this column is cached, update the cache.
     """
     keycache = []
-    col = self._headers.index(keyname) + 1
-    row = 2
-    while True:
-      cell = self._gd.GetCell(self._ssrc['id'], self._ssrc['wsid'], row, col)
-      if cell.content.text == None:
-        break
+    # Make these strings due to bug in gdata bug.
+    col = str(self._headers.index(keyname) + 1)
+    row = str(2)
+    cq = gdata.spreadsheets.client.CellQuery(
+             min_row=row, min_col=col, max_col=col)
+    cells = self._gd.GetCells(self._ssrc['id'], self._ssrc['wsid'], q=cq)
+    for cell in cells.entry:
       print cell.content.text
       keycache.append(cell.content.text)
-      row += 1
     if 'cache_%s' % keyname in self._ssrc:
       self._ssrc['cache_%s' % keyname] = keycache
 
@@ -361,14 +361,14 @@ class Spreadsheet(object):
     List the column labeled 'keyname.'
     """
     keycache = []
-    col = self._headers.index(keyname) + 1
-    row = 2
-    while True:
-      cell = self._gd.GetCell(self._ssrc['id'], self._ssrc['wsid'], row, col)
-      if cell.content.text == None:
-        break
+    # Make these strings due to bug in gdata bug.
+    col = str(self._headers.index(keyname) + 1)
+    row = str(2)
+    cq = gdata.spreadsheets.client.CellQuery(
+             min_row=row, min_col=col, max_col=col)
+    cells = self._gd.GetCells(self._ssrc['id'], self._ssrc['wsid'], q=cq)
+    for cell in cells.entry:
       keycache.append(cell.content.text)
-      row += 1
     self._ssrc['cache_%s' % keyname] = keycache
 
   def forget_headers(self):
