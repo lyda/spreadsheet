@@ -83,6 +83,8 @@ Testing and API
 * Ideas for mocking gdata?
 * Is `issue580`_ fixed yet? If so remove the ``str()`` calls for
   GetCells parameters.
+* Code layout - split things into modules so it's not one monlithic
+  script now that there's an install process.
 
 Features and hardening
 ~~~~~~~~~~~~~~~~~~~~~~
