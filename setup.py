@@ -152,7 +152,7 @@ if 'setuptools' not in dir():
 setup(
   cmdclass=cmdclass,
   name='spreadsheet',
-  version='1.2',
+  version='1.2.1',
   url='https://github.com/lyda/spreadsheet',
   author='Kevin Lyda',
   author_email='kevin@ie.suberic.net',

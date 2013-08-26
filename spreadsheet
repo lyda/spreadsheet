@@ -203,18 +203,21 @@ class Spreadsheet(object):
         httpd = None
         if port > (2 ** 16 - 1):
           raise SpreadsheetOutOfPorts()
-    request_token = self._gd.get_oauth_token(
+    req_token = self._gd.get_oauth_token(
         scopes=['https://spreadsheets.google.com/feeds/'],
         next='http://localhost:%s/' % port,
         consumer_key=str(self._apprc['consumer_key']),
         consumer_secret=str(self._apprc['consumer_secret']))
-    print 'Authorization URL: %s ' % request_token.generate_authorization_url(
-        google_apps_domain=str(self._apprc['google_apps_domain']))
+    if self._apprc['google_apps_domain']:
+      print 'Authorization URL: %s ' % req_token.generate_authorization_url(
+          google_apps_domain=str(self._apprc['google_apps_domain']))
+    else:
+      print 'Authorization URL: %s ' % req_token.generate_authorization_url()
     httpd.get_oauth_url()
 
     # Get request token and use that to get access token.
-    gdata.gauth.authorize_request_token(request_token, httpd.oauth_url)
-    self._gd.auth_token = self._gd.get_access_token(request_token)
+    gdata.gauth.authorize_request_token(req_token, httpd.oauth_url)
+    self._gd.auth_token = self._gd.get_access_token(req_token)
     self._authrc['access_token'] = gdata.gauth.token_to_blob(
         self._gd.auth_token)
 
