@@ -337,6 +337,7 @@ class Spreadsheet(object):
       cell = self._gd.GetCell(self._ssrc['id'], self._ssrc['wsid'],
           update_row, update_col)
       cell.cell.input_value = value
+      # TODO: handle gdata.client.RequestError
       self._gd.update(cell)
 
   def print_list(self, keyname):
